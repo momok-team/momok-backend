@@ -1,0 +1,121 @@
+name: Momok Backend CI/CD
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ format('deploy-{0}-{1}', github.workflow, github.ref_name) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew clean build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Github Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute Tag
+        id: meta
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=prod" >> $GITHUB_OUTPUT
+            echo "service=backend-prod" >> $GITHUB_OUTPUT
+            echo "container=momok-backend-prod" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev" >> $GITHUB_OUTPUT
+            echo "service=backend-dev" >> $GITHUB_OUTPUT
+            echo "container=momok-backend-dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy on Server (pull and up)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            set -euo pipefail
+            sudo chown -R ${{ secrets.SERVER_USER }}:${{ secrets.SERVER_USER }} /opt/momok
+            cd /opt/momok
+
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            SHA_TAG=${{ github.sha }}
+            ROLLING_TAG=${{ steps.meta.outputs.tag }}
+            SERVICE=${{ steps.meta.outputs.service }}
+            CONTAINER=${{ steps.meta.outputs.container }}
+            COMPOSE_CMD="docker compose --project-directory /opt/momok -f /opt/momok/docker-compose.yml"
+
+            PREV_IMAGE_ID=$(docker image inspect ${IMAGE}:${ROLLING_TAG} --format '{{.Id}}' 2>/dev/null || true)
+
+            docker pull ${IMAGE}:${SHA_TAG}
+            docker tag ${IMAGE}:${SHA_TAG} ${IMAGE}:${ROLLING_TAG}
+
+            export COMPOSE_FILE=/opt/momok/docker-compose.yml
+            if ! ${COMPOSE_CMD} up -d --no-deps --force-recreate ${SERVICE}; then
+              if [ -n "${PREV_IMAGE_ID}" ]; then
+                docker tag ${PREV_IMAGE_ID} ${IMAGE}:${ROLLING_TAG}
+                ${COMPOSE_CMD} up -d --no-deps --force-recreate ${SERVICE}
+              fi
+              exit 1
+            fi
+
+            sleep 15
+            RUNNING=$(docker inspect --format '{{.State.Running}}' ${CONTAINER} 2>/dev/null || echo "false")
+            RESTARTING=$(docker inspect --format '{{.State.Restarting}}' ${CONTAINER} 2>/dev/null || echo "true")
+            HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ${CONTAINER} 2>/dev/null || echo "none")
+
+            if [ "${RUNNING}" != "true" ] || [ "${RESTARTING}" = "true" ] || { [ "${HEALTH}" != "none" ] && [ "${HEALTH}" != "healthy" ]; }; then
+              if [ -n "${PREV_IMAGE_ID}" ]; then
+                docker tag ${PREV_IMAGE_ID} ${IMAGE}:${ROLLING_TAG}
+                ${COMPOSE_CMD} up -d --no-deps --force-recreate ${SERVICE}
+              fi
+              exit 1
+            fi
+
+            docker image prune -f --filter dangling=true
+            docker images "${IMAGE}" --format '{{.Tag}}' \
+              | grep -E '^[0-9a-f]{40}$' \
+              | grep -v "^${SHA_TAG}$" \
+              | xargs -r -I {} docker rmi "${IMAGE}:{}" >/dev/null 2>&1 || true

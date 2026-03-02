@@ -1,0 +1,113 @@
+services:
+  backend-prod:
+    image: ghcr.io/momok-team/momok-backend:prod
+    env_file:
+      - ./.env.prod
+    container_name: momok-backend-prod
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${DB_NAME_PROD}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - app-network
+    restart: always
+
+  backend-dev:
+    image: ghcr.io/momok-team/momok-backend:dev
+    env_file:
+      - ./.env.dev
+    container_name: momok-backend-dev
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${DB_NAME_DEV}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - app-network
+    restart: always
+
+  mysql:
+    image: mysql:8.0
+    container_name: momok-db
+    environment:
+      MYSQL_DATABASE: ${DB_NAME_PROD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Seoul
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: momok-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    restart: always
+
+  frontend:
+    image: ghcr.io/momok-team/momok-frontend:prod
+    container_name: momok-frontend
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: momok-nginx
+    ports:
+      - "80:80"
+      # - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - backend-dev
+      - backend-prod
+      - frontend
+    networks:
+      - app-network
+    restart: always
+
+  certbot:
+    image: certbot/certbot
+    container_name: momok-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
