@@ -26,8 +26,12 @@ public class RoomController {
 
 		VoteRoomRequestDto.Location location = voteRoomRequestDto.getLocation();
 
-		return ResponseEntity.ok(
-			roomService.saveVoteRoom(location.getLatitude(), location.getLongitude(), voteRoomRequestDto.getPassword())
-				.toDto());
+		if (location.getLatitude() == null || location.getLongitude() == null) {
+			return ResponseEntity.badRequest().build();
+		}
+
+		return ResponseEntity.status(HttpStatus.CREATED)
+			.body(roomService.saveVoteRoom(location.getLatitude(), location.getLongitude(),
+				voteRoomRequestDto.getPassword()).toDto());
 	}
 }
