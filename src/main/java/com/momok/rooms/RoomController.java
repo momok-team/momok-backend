@@ -1,5 +1,6 @@
 package com.momok.rooms;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +20,10 @@ public class RoomController {
 
 	@PostMapping
 	public ResponseEntity<VoteRoomResponseDto> createVoteRoom(@RequestBody VoteRoomRequestDto voteRoomRequestDto) {
+		if (voteRoomRequestDto == null || voteRoomRequestDto.getLocation() == null) {
+			return ResponseEntity.badRequest().build();
+		}
+
 		VoteRoomRequestDto.Location location = voteRoomRequestDto.getLocation();
 
 		return ResponseEntity.ok(
