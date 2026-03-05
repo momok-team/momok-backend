@@ -57,7 +57,7 @@ class RoomControllerTest {
 		mockMvc.perform(post("/rooms").contentType(MediaType.APPLICATION_JSON)
 			.content(objectMapper.writeValueAsString(voteRoomRequestDto)))
 			.andDo(print())
-			.andExpect(status().isOk())
+			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.roomUrl").value("https://momok.site/rooms/"+ id));
 	}
 }
