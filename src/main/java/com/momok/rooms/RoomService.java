@@ -13,6 +13,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.momok.rooms.Dto.KakaoMapResponseDto;
 import com.momok.rooms.Dto.NaverBlogResponseDto;
@@ -86,11 +88,20 @@ public class RoomService {
 		List<RestaurantCard> restaurantCardList = new ArrayList<>();
 
 		for (int page = 1; page <= 3; page++) {
-			String url = String.format(
-				"https://dapi.kakao.com/v2/local/search/category.json?category_group_code=FD6&x=%f&y=%f&radius=500&sort=distance&page=%d&size=15",
-				longitude, latitude, page);
+			UriComponents uri = UriComponentsBuilder.fromUriString(
+					"https://dapi.kakao.com/v2/local/search/category.json")
+				.queryParam("category_group_code", "FD6")
+				.queryParam("x", longitude)
+				.queryParam("y", latitude)
+				.queryParam("radius", "500")
+				.queryParam("sort", "distance")
+				.queryParam("page", page)
+				.queryParam("size", "15")
+				.build();
 			restaurantCardList.addAll(
-				restTemplate.exchange(url, HttpMethod.GET, entity, KakaoMapResponseDto.class).getBody().getDocuments());
+				restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, KakaoMapResponseDto.class)
+					.getBody()
+					.getDocuments());
 		}
 
 		return restaurantCardList.stream().filter(
@@ -104,9 +115,12 @@ public class RoomService {
 			RestTemplate restTemplate = new RestTemplate();
 			log.info("restaurantCard.getName() = {}, restaurantCard.getAddressName() = {}", restaurantCard.getName(),
 				restaurantCard.getAddressName());
-			String url = String.format(
-				"https://openapi.naver.com/v1/search/blog.json?query=%s+%s&sort=sim&display=3&start=1",
-				restaurantCard.getName(), restaurantCard.getAddressName());
+			UriComponents uri = UriComponentsBuilder.fromUriString("https://openapi.naver.com/v1/search/blog.json")
+				.queryParam("query", restaurantCard.getName() + " + " + restaurantCard.getAddressName())
+				.queryParam("sort", "sim")
+				.queryParam("display", "3")
+				.queryParam("start", "1")
+				.build();
 
 			HttpHeaders httpHeaders = new HttpHeaders();
 			httpHeaders.set("X-Naver-Client-Id", NAVER_CLIENT_ID);
@@ -120,8 +134,8 @@ public class RoomService {
 				continue;
 			}
 
-			ResponseEntity<NaverBlogResponseDto> response = restTemplate.exchange(url, HttpMethod.GET, entity,
-				NaverBlogResponseDto.class);
+			ResponseEntity<NaverBlogResponseDto> response = restTemplate.exchange(uri.toString(), HttpMethod.GET,
+				entity, NaverBlogResponseDto.class);
 
 			if (response.getBody() != null) {
 				restaurantCard.setReviews(response.getBody().getItems());
