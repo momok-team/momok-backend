@@ -131,4 +131,21 @@ public class RoomService {
 
 		return restaurantCards;
 	}
+
+	public VoteRoom inquiryVoteRoom(String roomId) {
+		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
+		List<RestaurantCard> cachedRestaurantCards = caffeineCacheData.get(CAFFEINE_RESTAURANT_CARD_KEY + roomId,
+			List.class);
+		if (cachedRestaurantCards != null) {
+			voteRoom.setRestaurantCards(cachedRestaurantCards);
+		} else {
+			List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(voteRoom.getLatitude(),
+				voteRoom.getLongitude());
+			restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+			voteRoom.setRestaurantCards(restaurantCards);
+			caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + roomId, restaurantCards);
+		}
+
+		return voteRoom;
+	}
 }

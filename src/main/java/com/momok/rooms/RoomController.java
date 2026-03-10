@@ -2,6 +2,8 @@ package com.momok.rooms;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,5 +43,12 @@ public class RoomController {
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.body(roomService.addVoteRoom(location.getLatitude(), location.getLongitude(),
 				voteRoomRequestDto.getPassword()).toDetailDto());
+	}
+
+	@GetMapping("/{roomId}")
+	@Operation(summary = "방 조회", description = "투표 방을 조회합니다.")
+	@ApiResponse(responseCode = "200")
+	public ResponseEntity<VoteRoomDetailsResponseDto> getVoteRoom(@PathVariable String roomId) {
+		return ResponseEntity.status(HttpStatus.OK).body(roomService.inquiryVoteRoom(roomId).toDetailDto());
 	}
 }
