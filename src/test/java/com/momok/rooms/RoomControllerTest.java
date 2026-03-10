@@ -1,11 +1,14 @@
 package com.momok.rooms;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,10 +18,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momok.global.config.SecurityConfig;
+import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
 import com.momok.rooms.Dto.VoteRoomRequestDto;
+import com.momok.rooms.domain.RestaurantCard;
+import com.momok.rooms.domain.VoteRoom;
 
 @WebMvcTest(RoomController.class)
 @Import(SecurityConfig.class)
@@ -43,21 +50,38 @@ class RoomControllerTest {
 		VoteRoomRequestDto voteRoomRequestDto = new VoteRoomRequestDto(password,
 			new VoteRoomRequestDto.Location(latitude, longitude));
 		String id = "aaaaaaaa-bbbb-cccc-ddddeeeeffff";
+		List<RestaurantCard> restaurantCards = new ArrayList<>();
+		// RestaurantCard restaurantCard = new RestaurantCard();
+		// restaurantCards.add(restaurantCard);
+		LocalDateTime timeNow = LocalDateTime.now().plusMinutes(30);
 		VoteRoom voteRoom = VoteRoom.builder()
 			.id(id)
 			.latitude(latitude)
 			.longitude(longitude)
 			.password(password)
-			.voteDeadline(LocalDateTime.now().plusMinutes(30))
+			.voteDeadline(timeNow)
+			.restaurantCards(restaurantCards)
 			.build();
 
-		given(roomService.saveVoteRoom(latitude, longitude, password)).willReturn(voteRoom);
+		given(roomService.addVoteRoom(latitude, longitude, password)).willReturn(voteRoom);
 
 		// when & then
-		mockMvc.perform(post("/rooms").contentType(MediaType.APPLICATION_JSON)
-			.content(objectMapper.writeValueAsString(voteRoomRequestDto)))
+		MvcResult result = mockMvc.perform(post("/rooms").contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(voteRoomRequestDto)))
 			.andDo(print())
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.roomUrl").value("https://momok.site/rooms/"+ id));
+			.andExpect(jsonPath("$.location.latitude").value(voteRoomRequestDto.getLocation().getLatitude()))
+			.andExpect(jsonPath("$.location.longitude").value(voteRoomRequestDto.getLocation().getLongitude()))
+			.andExpect(jsonPath("$.password").value(password))
+			.andExpect(jsonPath("$.restaurantCards").value(restaurantCards))
+			.andExpect(jsonPath("$.roomId").value(id))
+			.andReturn();
+
+		VoteRoomDetailsResponseDto response = objectMapper.readValue(
+			result.getResponse().getContentAsString(),
+			VoteRoomDetailsResponseDto.class
+		);
+
+		assertThat(response.getVoteDeadline()).isEqualTo(timeNow);
 	}
 }

@@ -11,12 +11,14 @@ import lombok.Getter;
 
 @Builder
 @Getter
-public class VoteRoomResponseDto {
+public class VoteRoomDetailsResponseDto {
 	private String roomId;
 
 	private LocalDateTime voteDeadline;
 
-	private VoteRoomResponseDto.Location location;
+	private Location location;
+
+	private Integer password;
 
 	private List<RestaurantCard> restaurantCards;
 

@@ -38,6 +38,7 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     runtimeOnly 'com.mysql:mysql-connector-j'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
 }
 
 tasks.named('test') {

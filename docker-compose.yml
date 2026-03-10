@@ -73,8 +73,11 @@ services:
   frontend:
     image: ghcr.io/momok-team/momok-frontend:prod
     container_name: momok-frontend
+    env_file:
+      - ./.env.prod
     environment:
-      - NODE_ENV=production
+      - VITE_KAKAO_REST_API_KEY=${VITE_KAKAO_REST_API_KEY}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
     networks:
       - app-network
     restart: always
