@@ -35,6 +35,8 @@ public class RoomService {
 
 	private final CaffeineCacheManager caffeineCacheManager;
 
+	private final RestTemplate restTemplate;
+
 	private Cache caffeineCacheData;
 
 	private final String CAFFEINE_RESTAURANT_CARD_KEY = "caffeine_restaurant_key";
@@ -80,7 +82,6 @@ public class RoomService {
 	}
 
 	private List<RestaurantCard> getRestaurantsFromKakaoMap(double latitude, double longitude) {
-		RestTemplate restTemplate = new RestTemplate();
 		HttpHeaders httpHeaders = new HttpHeaders();
 		httpHeaders.set("Authorization", "KakaoAK " + KAKAO_API_KEY);
 
@@ -120,7 +121,6 @@ public class RoomService {
 
 	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
 		InterruptedException {
-		RestTemplate restTemplate = new RestTemplate();
 
 		for (RestaurantCard restaurantCard : restaurantCards) {
 			awaitNaverQuota();
