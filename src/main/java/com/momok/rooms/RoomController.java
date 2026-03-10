@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
 import com.momok.rooms.Dto.VoteRoomRequestDto;
+import com.momok.rooms.Dto.VoteRoomResponseDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -48,8 +49,8 @@ public class RoomController {
 	@GetMapping("/{roomId}")
 	@Operation(summary = "방 조회", description = "투표 방을 조회합니다.")
 	@ApiResponse(responseCode = "200")
-	public ResponseEntity<VoteRoomDetailsResponseDto> getVoteRoom(@PathVariable String roomId) throws
+	public ResponseEntity<VoteRoomResponseDto> getVoteRoom(@PathVariable String roomId) throws
 		InterruptedException {
-		return ResponseEntity.status(HttpStatus.OK).body(roomService.inquiryVoteRoom(roomId).toDetailDto());
+		return ResponseEntity.status(HttpStatus.OK).body(roomService.inquiryVoteRoom(roomId).toDto());
 	}
 }

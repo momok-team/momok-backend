@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.annotation.CreatedDate;
 
 import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
+import com.momok.rooms.Dto.VoteRoomResponseDto;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,6 +55,15 @@ public class VoteRoom {
 			.roomId(id)
 			.voteDeadline(voteDeadline)
 			.password(password)
+			.location(new VoteRoomDetailsResponseDto.Location(latitude, longitude))
+			.restaurantCards(restaurantCards)
+			.build();
+	}
+
+	public VoteRoomResponseDto toDto() {
+		return VoteRoomResponseDto.builder()
+			.roomId(id)
+			.voteDeadline(voteDeadline)
 			.location(new VoteRoomDetailsResponseDto.Location(latitude, longitude))
 			.restaurantCards(restaurantCards)
 			.build();
