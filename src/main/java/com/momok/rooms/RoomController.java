@@ -48,7 +48,8 @@ public class RoomController {
 	@GetMapping("/{roomId}")
 	@Operation(summary = "방 조회", description = "투표 방을 조회합니다.")
 	@ApiResponse(responseCode = "200")
-	public ResponseEntity<VoteRoomDetailsResponseDto> getVoteRoom(@PathVariable String roomId) {
+	public ResponseEntity<VoteRoomDetailsResponseDto> getVoteRoom(@PathVariable String roomId) throws
+		InterruptedException {
 		return ResponseEntity.status(HttpStatus.OK).body(roomService.inquiryVoteRoom(roomId).toDetailDto());
 	}
 }

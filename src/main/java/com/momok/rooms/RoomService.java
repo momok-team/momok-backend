@@ -97,6 +97,7 @@ public class RoomService {
 				.queryParam("sort", "distance")
 				.queryParam("page", page)
 				.queryParam("size", "15")
+				.encode()
 				.build();
 			restaurantCardList.addAll(
 				restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, KakaoMapResponseDto.class)
@@ -110,9 +111,20 @@ public class RoomService {
 			.limit(25).toList();
 	}
 
-	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) {
+	private void awaitNaverQuota() throws InterruptedException {
+		while (!rateLimitService.allowRequest("naver-api", 9)) {
+			long sleepMillis = 1000 - (System.currentTimeMillis() % 1000) + 10;
+			Thread.sleep(sleepMillis);
+		}
+	}
+
+	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
+		InterruptedException {
+		RestTemplate restTemplate = new RestTemplate();
+
 		for (RestaurantCard restaurantCard : restaurantCards) {
-			RestTemplate restTemplate = new RestTemplate();
+			awaitNaverQuota();
+
 			log.info("restaurantCard.getName() = {}, restaurantCard.getAddressName() = {}", restaurantCard.getName(),
 				restaurantCard.getAddressName());
 			UriComponents uri = UriComponentsBuilder.fromUriString("https://openapi.naver.com/v1/search/blog.json")
@@ -120,6 +132,7 @@ public class RoomService {
 				.queryParam("sort", "sim")
 				.queryParam("display", "3")
 				.queryParam("start", "1")
+				.encode()
 				.build();
 
 			HttpHeaders httpHeaders = new HttpHeaders();
@@ -127,12 +140,6 @@ public class RoomService {
 			httpHeaders.set("X-Naver-Client-Secret", NAVER_CLIENT_SECRET);
 
 			HttpEntity<String> entity = new HttpEntity<>(httpHeaders);
-
-			boolean isAllowed = rateLimitService.allowRequest("naver-api", 9);
-
-			if (!isAllowed) {
-				continue;
-			}
 
 			ResponseEntity<NaverBlogResponseDto> response = restTemplate.exchange(uri.toString(), HttpMethod.GET,
 				entity, NaverBlogResponseDto.class);
@@ -146,7 +153,7 @@ public class RoomService {
 		return restaurantCards;
 	}
 
-	public VoteRoom inquiryVoteRoom(String roomId) {
+	public VoteRoom inquiryVoteRoom(String roomId) throws InterruptedException {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
 		List<RestaurantCard> cachedRestaurantCards = caffeineCacheData.get(CAFFEINE_RESTAURANT_CARD_KEY + roomId,
 			List.class);
