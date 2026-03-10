@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,6 +19,7 @@ import com.momok.rooms.Dto.NaverBlogResponseDto;
 import com.momok.rooms.domain.RestaurantCard;
 import com.momok.rooms.domain.VoteRoom;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,6 +31,12 @@ public class RoomService {
 
 	private final RateLimitService rateLimitService;
 
+	private final CaffeineCacheManager caffeineCacheManager;
+
+	private Cache caffeineCacheData;
+
+	private final String CAFFEINE_RESTAURANT_CARD_KEY = "caffeine_restaurant_key";
+
 	@Value("${kakao.api.key}")
 	private String KAKAO_API_KEY;
 
@@ -37,7 +46,12 @@ public class RoomService {
 	@Value("${naver.client.secret}")
 	private String NAVER_CLIENT_SECRET;
 
-	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) {
+	@PostConstruct
+	public void initCaches() {
+		this.caffeineCacheData = caffeineCacheManager.getCache("caffeine");
+	}
+
+	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) throws InterruptedException {
 		if (latitude > 90 || latitude < -90) {
 			throw new IllegalArgumentException("latitude는 90보다 작거나, -90보다 커야 합니다.");
 		}
@@ -57,6 +71,8 @@ public class RoomService {
 			.password(password)
 			.restaurantCards(restaurantCards)
 			.build());
+
+		caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + voteRoom.getId(), restaurantCards);
 
 		return voteRoom;
 	}
