@@ -64,7 +64,7 @@ public class VoteRoom {
 		return VoteRoomResponseDto.builder()
 			.roomId(id)
 			.voteDeadline(voteDeadline)
-			.location(new VoteRoomDetailsResponseDto.Location(latitude, longitude))
+			.location(new VoteRoomResponseDto.Location(latitude, longitude))
 			.restaurantCards(restaurantCards)
 			.build();
 	}

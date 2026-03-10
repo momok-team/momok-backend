@@ -16,7 +16,7 @@ public class VoteRoomResponseDto {
 
 	private LocalDateTime voteDeadline;
 
-	private VoteRoomDetailsResponseDto.Location location;
+	private VoteRoomResponseDto.Location location;
 
 	private List<RestaurantCard> restaurantCards;
 
