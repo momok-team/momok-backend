@@ -100,10 +100,13 @@ public class RoomService {
 				.queryParam("size", "15")
 				.encode()
 				.build();
-			restaurantCardList.addAll(
-				restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, KakaoMapResponseDto.class)
-					.getBody()
-					.getDocuments());
+
+			KakaoMapResponseDto contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity,
+				KakaoMapResponseDto.class).getBody();
+
+			if (contents != null) {
+				restaurantCardList.addAll(contents.getDocuments());
+			}
 		}
 
 		return restaurantCardList.stream().filter(
