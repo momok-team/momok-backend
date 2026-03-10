@@ -1,17 +1,43 @@
 package com.momok.rooms;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import com.momok.rooms.Dto.KakaoMapResponseDto;
+import com.momok.rooms.Dto.NaverBlogResponseDto;
+import com.momok.rooms.domain.RestaurantCard;
+import com.momok.rooms.domain.VoteRoom;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RoomService {
 	private final RoomRepository roomRepository;
 
-	public VoteRoom saveVoteRoom(double latitude, double longitude, Integer password) {
+	private final RateLimitService rateLimitService;
+
+	@Value("${kakao.api.key}")
+	private String KAKAO_API_KEY;
+
+	@Value("${naver.client.id}")
+	private String NAVER_CLIENT_ID;
+
+	@Value("${naver.client.secret}")
+	private String NAVER_CLIENT_SECRET;
+
+	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) {
 		if (latitude > 90 || latitude < -90) {
 			throw new IllegalArgumentException("latitude는 90보다 작거나, -90보다 커야 합니다.");
 		}
@@ -19,12 +45,74 @@ public class RoomService {
 		if (longitude > 180 || longitude < -180) {
 			throw new IllegalArgumentException("longitude는 180보다 작거나, -180보다 커야 합니다.");
 		}
-		return roomRepository.save(VoteRoom.builder()
+
+		List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(latitude, longitude);
+
+		restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+
+		VoteRoom voteRoom = roomRepository.save(VoteRoom.builder()
 			.voteDeadline(LocalDateTime.now().plusMinutes(30))
 			.latitude(latitude)
 			.longitude(longitude)
 			.password(password)
-			.build()
-		);
+			.restaurantCards(restaurantCards)
+			.build());
+
+		return voteRoom;
+	}
+
+	private List<RestaurantCard> getRestaurantsFromKakaoMap(double latitude, double longitude) {
+		RestTemplate restTemplate = new RestTemplate();
+		HttpHeaders httpHeaders = new HttpHeaders();
+		httpHeaders.set("Authorization", "KakaoAK " + KAKAO_API_KEY);
+
+		HttpEntity<String> entity = new HttpEntity<>(httpHeaders);
+		List<RestaurantCard> restaurantCardList = new ArrayList<>();
+
+		for (int page = 1; page <= 3; page++) {
+			String url = String.format(
+				"https://dapi.kakao.com/v2/local/search/category.json?category_group_code=FD6&x=%f&y=%f&radius=500&sort=distance&page=%d&size=15",
+				longitude, latitude, page);
+			restaurantCardList.addAll(
+				restTemplate.exchange(url, HttpMethod.GET, entity, KakaoMapResponseDto.class).getBody().getDocuments());
+		}
+
+		return restaurantCardList.stream().filter(
+				restaurantCard -> !restaurantCard.getCategoryName().contains("술집") && !restaurantCard.getCategoryName()
+					.contains("간식"))
+			.limit(25).toList();
+	}
+
+	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) {
+		for (RestaurantCard restaurantCard : restaurantCards) {
+			RestTemplate restTemplate = new RestTemplate();
+			log.info("restaurantCard.getName() = {}, restaurantCard.getAddressName() = {}", restaurantCard.getName(),
+				restaurantCard.getAddressName());
+			String url = String.format(
+				"https://openapi.naver.com/v1/search/blog.json?query=%s+%s&sort=sim&display=3&start=1",
+				restaurantCard.getName(), restaurantCard.getAddressName());
+
+			HttpHeaders httpHeaders = new HttpHeaders();
+			httpHeaders.set("X-Naver-Client-Id", NAVER_CLIENT_ID);
+			httpHeaders.set("X-Naver-Client-Secret", NAVER_CLIENT_SECRET);
+
+			HttpEntity<String> entity = new HttpEntity<>(httpHeaders);
+
+			boolean isAllowed = rateLimitService.allowRequest("naver-api", 9);
+
+			if (!isAllowed) {
+				continue;
+			}
+
+			ResponseEntity<NaverBlogResponseDto> response = restTemplate.exchange(url, HttpMethod.GET, entity,
+				NaverBlogResponseDto.class);
+
+			if (response.getBody() != null) {
+				restaurantCard.setReviews(response.getBody().getItems());
+				restaurantCard.setTotalReview(response.getBody().getTotal());
+			}
+		}
+
+		return restaurantCards;
 	}
 }
