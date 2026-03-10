@@ -110,9 +110,10 @@ public class RoomService {
 		}
 
 		return restaurantCardList.stream().filter(
-				restaurantCard -> !restaurantCard.getCategoryName().contains("술집") && !restaurantCard.getCategoryName()
-					.contains("간식"))
-			.limit(25).toList();
+			restaurantCard -> {
+				String category = restaurantCard.getCategoryName();
+				return category != null && !category.contains("술집") && !category.contains("간식");
+			}).limit(25).toList();
 	}
 
 	private void awaitNaverQuota() throws InterruptedException {
