@@ -135,7 +135,6 @@ public class RoomService {
 				.queryParam("sort", "sim")
 				.queryParam("display", "3")
 				.queryParam("start", "1")
-				.encode()
 				.build();
 
 			HttpHeaders httpHeaders = new HttpHeaders();
