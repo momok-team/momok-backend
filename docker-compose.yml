@@ -1,8 +1,6 @@
 services:
   backend-prod:
     image: ghcr.io/momok-team/momok-backend:prod
-    env_file:
-      - ./.env.prod
     container_name: momok-backend-prod
     environment:
       - SPRING_PROFILES_ACTIVE=prod
@@ -11,7 +9,11 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
       - SPRING_REDIS_HOST=redis
       - SPRING_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_USERNAME=${REDIS_USERNAME}
       - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KAKAO_API_KEY=${KAKAO_API_KEY}
+      - NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
+      - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
     depends_on:
       - mysql
       - redis
@@ -21,17 +23,19 @@ services:
 
   backend-dev:
     image: ghcr.io/momok-team/momok-backend:dev
-    env_file:
-      - ./.env.dev
     container_name: momok-backend-dev
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${DB_NAME_DEV}?characterEncoding=UTF-8&serverTimezone=Asia/Seoul
       - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PORT=6379
-      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_USERNAME=${REDIS_USERNAME}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KAKAO_API_KEY=${KAKAO_API_KEY_DEV}
+      - NAVER_CLIENT_ID=${NAVER_CLIENT_ID_DEV}
+      - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET_DEV}
     depends_on:
       - mysql
       - redis
@@ -73,10 +77,8 @@ services:
   frontend:
     image: ghcr.io/momok-team/momok-frontend:prod
     container_name: momok-frontend
-    env_file:
-      - ./.env.prod
     environment:
-      - VITE_KAKAO_REST_API_KEY=${VITE_KAKAO_REST_API_KEY}
+      - VITE_KAKAO_REST_API_KEY=${KAKAO_API_KEY}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL}
     networks:
       - app-network
