@@ -101,6 +101,8 @@ jobs:
               exit 1
             fi
 
+            sudo docker exec momok-nginx nginx -s reload
+
             sleep 15
             RUNNING=$(sudo docker inspect --format '{{.State.Running}}' ${CONTAINER} 2>/dev/null || echo "false")
             RESTARTING=$(sudo docker inspect --format '{{.State.Restarting}}' ${CONTAINER} 2>/dev/null || echo "true")
