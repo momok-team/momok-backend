@@ -3,6 +3,7 @@ package com.momok.rooms;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
@@ -37,9 +38,9 @@ public class RoomService {
 
 	private final RestTemplate restTemplate;
 
-	private Cache caffeineCacheData;
+	private Cache restaurantCardsCache;
 
-	private final String CAFFEINE_RESTAURANT_CARD_KEY = "caffeine_restaurant_key";
+	private final String RESTAURANT_CARDS_CACHE_NAME = "restaurant_cards";
 
 	@Value("${kakao.api.key}")
 	private String KAKAO_API_KEY;
@@ -52,7 +53,8 @@ public class RoomService {
 
 	@PostConstruct
 	public void initCaches() {
-		this.caffeineCacheData = caffeineCacheManager.getCache("caffeine");
+		this.restaurantCardsCache = Objects.requireNonNull(caffeineCacheManager.getCache(RESTAURANT_CARDS_CACHE_NAME),
+			"restaurantCards cache must be configured");
 	}
 
 	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) throws InterruptedException {
@@ -66,7 +68,7 @@ public class RoomService {
 
 		List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(latitude, longitude);
 
-		restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+		getRestaurantsBlogReviewFromNaver(restaurantCards);
 
 		VoteRoom voteRoom = roomRepository.save(VoteRoom.builder()
 			.voteDeadline(LocalDateTime.now().plusMinutes(30))
@@ -76,7 +78,7 @@ public class RoomService {
 			.restaurantCards(restaurantCards)
 			.build());
 
-		caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + voteRoom.getId(), restaurantCards);
+		restaurantCardsCache.put(voteRoom.getId(), restaurantCards);
 
 		return voteRoom;
 	}
@@ -123,7 +125,7 @@ public class RoomService {
 		}
 	}
 
-	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
+	private void getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
 		InterruptedException {
 
 		for (RestaurantCard restaurantCard : restaurantCards) {
@@ -152,22 +154,19 @@ public class RoomService {
 				restaurantCard.setTotalReview(response.getBody().getTotal());
 			}
 		}
-
-		return restaurantCards;
 	}
 
 	public VoteRoom inquiryVoteRoom(String roomId) throws InterruptedException {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
-		List<RestaurantCard> cachedRestaurantCards = caffeineCacheData.get(CAFFEINE_RESTAURANT_CARD_KEY + roomId,
-			List.class);
+		List<RestaurantCard> cachedRestaurantCards = restaurantCardsCache.get(roomId, List.class);
 		if (cachedRestaurantCards != null) {
 			voteRoom.setRestaurantCards(cachedRestaurantCards);
 		} else {
 			List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(voteRoom.getLatitude(),
 				voteRoom.getLongitude());
-			restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+			getRestaurantsBlogReviewFromNaver(restaurantCards);
 			voteRoom.setRestaurantCards(restaurantCards);
-			caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + roomId, restaurantCards);
+			restaurantCardsCache.put(roomId, restaurantCards);
 		}
 
 		return voteRoom;
