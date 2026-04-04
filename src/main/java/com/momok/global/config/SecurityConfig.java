@@ -40,7 +40,7 @@ public class SecurityConfig {
 	@Profile("dev")
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOriginPatterns(Collections.singletonList("http://localhost:3000"));
+		configuration.setAllowedOriginPatterns(Collections.singletonList("http://localhost:5173"));
 		configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(Collections.singletonList("*"));
 		configuration.setAllowCredentials(true);
