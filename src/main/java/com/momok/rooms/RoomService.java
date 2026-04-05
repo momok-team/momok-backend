@@ -2,12 +2,15 @@ package com.momok.rooms;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
+import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,6 +20,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.momok.global.JwtProvider;
+import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.KakaoMapResponseDto;
 import com.momok.rooms.Dto.NaverBlogResponseDto;
 import com.momok.rooms.domain.RestaurantCard;
@@ -36,11 +41,17 @@ public class RoomService {
 
 	private final CaffeineCacheManager caffeineCacheManager;
 
+	private final RedisCacheManager redisCacheManager;
+
 	private final RestTemplate restTemplate;
 
 	private Cache restaurantCardsCache;
 
+	private Cache guestCache;
+
 	private final String RESTAURANT_CARDS_CACHE_NAME = "restaurant_cards";
+
+	private final String GUEST_DEVICE_CACHE_NAME = "guests";
 
 	@Value("${kakao.api.key}")
 	private String KAKAO_API_KEY;
@@ -51,10 +62,14 @@ public class RoomService {
 	@Value("${naver.client.secret}")
 	private String NAVER_CLIENT_SECRET;
 
+	private final JwtProvider jwtProvider;
+
 	@PostConstruct
 	public void initCaches() {
 		this.restaurantCardsCache = Objects.requireNonNull(caffeineCacheManager.getCache(RESTAURANT_CARDS_CACHE_NAME),
 			"restaurantCards cache must be configured");
+		this.guestCache = Objects.requireNonNull(redisCacheManager.getCache(GUEST_DEVICE_CACHE_NAME),
+			"guest_device cache must be configured");
 	}
 
 	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) throws InterruptedException {
@@ -170,5 +185,23 @@ public class RoomService {
 		}
 
 		return voteRoom;
+	}
+
+	public String addGuest(String roomId, GuestEnterRequestDto guestEnterRequestDto) {
+		// UUID 생성
+		String uuid = UUID.randomUUID().toString();
+		String key = "roomId:" + roomId + ":deviceId:" + guestEnterRequestDto.getDeviceId();
+
+		if (guestCache.get(key) == null) {
+			log.info("GuestRandomUUID={}", uuid);
+			guestCache.put(key, uuid);
+		} else {
+			uuid = guestCache.get(key, String.class);
+		}
+
+		HashMap<String, Object> claim = new HashMap<>();
+		claim.put("roomId", roomId);
+		claim.put("deviceId", guestEnterRequestDto.getDeviceId());
+		return jwtProvider.generateAccessToken(uuid, claim);
 	}
 }

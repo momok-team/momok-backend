@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.momok.rooms.Dto.GuestEnterRequestDto;
+import com.momok.rooms.Dto.GuestEnterResponseDto;
 import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
 import com.momok.rooms.Dto.VoteRoomRequestDto;
 import com.momok.rooms.Dto.VoteRoomResponseDto;
@@ -52,5 +54,12 @@ public class RoomController {
 	public ResponseEntity<VoteRoomResponseDto> getVoteRoom(@PathVariable String roomId) throws
 		InterruptedException {
 		return ResponseEntity.status(HttpStatus.OK).body(roomService.inquiryVoteRoom(roomId).toDto());
+	}
+
+	@PostMapping("/{roomId}/enter")
+	public ResponseEntity<GuestEnterResponseDto> enterGuest(@PathVariable String roomId,
+		@RequestBody GuestEnterRequestDto guestEnterRequestDto) {
+		return ResponseEntity.status(HttpStatus.OK)
+			.body(new GuestEnterResponseDto(roomService.addGuest(roomId, guestEnterRequestDto)));
 	}
 }
