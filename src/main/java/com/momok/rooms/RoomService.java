@@ -236,6 +236,11 @@ public class RoomService {
 	}
 
 	public String addGuest(String roomId, GuestEnterRequestDto guestEnterRequestDto) {
+		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
+		if (voteRoom.getVoteDeadline().plusMinutes(30).isBefore(LocalDateTime.now())) {
+			throw new IllegalStateException("마감된 투표방입니다.");
+		}
+		
 		// UUID 생성
 		String uuid = UUID.randomUUID().toString();
 		String key = "roomId:" + roomId + ":deviceId:" + guestEnterRequestDto.getDeviceId();
