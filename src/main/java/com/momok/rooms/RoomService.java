@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
@@ -84,6 +86,7 @@ public class RoomService {
 		List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(latitude, longitude);
 
 		getRestaurantsBlogReviewFromNaver(restaurantCards);
+		getRestaurantThumbnailUrl(restaurantCards);
 
 		VoteRoom voteRoom = roomRepository.save(VoteRoom.builder()
 			.voteDeadline(LocalDateTime.now().plusMinutes(30))
@@ -166,9 +169,54 @@ public class RoomService {
 
 			if (response.getBody() != null) {
 				restaurantCard.setReviews(response.getBody().getItems());
-				restaurantCard.setTotalReview(response.getBody().getTotal());
+				restaurantCard.setReviewCount(response.getBody().getTotal());
 			}
 		}
+	}
+
+	private void getRestaurantThumbnailUrl(List<RestaurantCard> restaurantCards) {
+		for (RestaurantCard restaurantCard : restaurantCards) {
+			HttpHeaders httpHeaders = new HttpHeaders();
+			HttpEntity<String> entity = new HttpEntity<>(httpHeaders);
+			UriComponents uri = UriComponentsBuilder.fromUriString(
+					"http://place.map.kakao.com/" + restaurantCard.getId())
+				.encode()
+				.build();
+
+			String contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, String.class).getBody();
+			String imageUrl = getOgImage(contents);
+			if (contents != null) {
+				restaurantCard.setThumbnailUrl(imageUrl);
+			}
+		}
+	}
+
+	private String getOgImage(String html) {
+		String regex = "<meta[^>]*property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)[\"']";
+		String regexSafe = "<meta[^>]*content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:image[\"']";
+
+		String imageUrl = null;
+
+		Pattern pattern = Pattern.compile(regex);
+		Matcher matcher = pattern.matcher(html);
+
+		if (matcher.find()) {
+			imageUrl = matcher.group(1);
+		} else {
+			pattern = Pattern.compile(regexSafe);
+			matcher = pattern.matcher(html);
+			if (matcher.find()) {
+				imageUrl = matcher.group(1);
+			}
+		}
+
+		if (imageUrl != null) {
+			if (imageUrl.startsWith("//")) {
+				imageUrl = "https:" + imageUrl;
+			}
+		}
+
+		return imageUrl;
 	}
 
 	public VoteRoom inquiryVoteRoom(String roomId) throws InterruptedException {
