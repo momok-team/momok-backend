@@ -184,9 +184,9 @@ public class RoomService {
 				.build();
 
 			String contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, String.class).getBody();
-			String imageUrl = getOgImage(contents);
+
 			if (contents != null) {
-				restaurantCard.setThumbnailUrl(imageUrl);
+				restaurantCard.setThumbnailUrl(getOgImage(contents));
 			}
 		}
 	}
@@ -237,17 +237,22 @@ public class RoomService {
 
 	public String addGuest(String roomId, GuestEnterRequestDto guestEnterRequestDto) {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
-		if (voteRoom.getVoteDeadline().plusMinutes(30).isBefore(LocalDateTime.now())) {
+		if (voteRoom.getVoteDeadline().isBefore(LocalDateTime.now())) {
 			throw new IllegalStateException("마감된 투표방입니다.");
 		}
-		
+
 		// UUID 생성
 		String uuid = UUID.randomUUID().toString();
+		String deviceId = guestEnterRequestDto.getDeviceId();
+		if (deviceId == null) {
+			throw new IllegalArgumentException("deviceId 값이 null입니다.");
+		}
+
 		String key = "roomId:" + roomId + ":deviceId:" + guestEnterRequestDto.getDeviceId();
 
 		if (guestCache.get(key) == null) {
 			log.info("GuestRandomUUID={}", uuid);
-			guestCache.put(key, uuid);
+			guestCache.putIfAbsent(key, uuid);
 		} else {
 			uuid = guestCache.get(key, String.class);
 		}
