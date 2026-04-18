@@ -35,5 +35,7 @@ public class RestaurantCard {
 
 	private List<NaverBlogResponseDto.BlogItem> reviews;
 
-	private Integer totalReview;
+	private Integer reviewCount;
+
+	private String thumbnailUrl;
 }

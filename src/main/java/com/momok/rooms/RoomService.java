@@ -2,20 +2,29 @@ package com.momok.rooms;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
+import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.momok.global.JwtProvider;
+import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.KakaoMapResponseDto;
 import com.momok.rooms.Dto.NaverBlogResponseDto;
 import com.momok.rooms.domain.RestaurantCard;
@@ -35,11 +44,17 @@ public class RoomService {
 
 	private final CaffeineCacheManager caffeineCacheManager;
 
+	private final RedisCacheManager redisCacheManager;
+
 	private final RestTemplate restTemplate;
 
-	private Cache caffeineCacheData;
+	private Cache restaurantCardsCache;
 
-	private final String CAFFEINE_RESTAURANT_CARD_KEY = "caffeine_restaurant_key";
+	private Cache guestCache;
+
+	private final String RESTAURANT_CARDS_CACHE_NAME = "restaurant_cards";
+
+	private final String GUEST_DEVICE_CACHE_NAME = "guests";
 
 	@Value("${kakao.api.key}")
 	private String KAKAO_API_KEY;
@@ -50,9 +65,14 @@ public class RoomService {
 	@Value("${naver.client.secret}")
 	private String NAVER_CLIENT_SECRET;
 
+	private final JwtProvider jwtProvider;
+
 	@PostConstruct
 	public void initCaches() {
-		this.caffeineCacheData = caffeineCacheManager.getCache("caffeine");
+		this.restaurantCardsCache = Objects.requireNonNull(caffeineCacheManager.getCache(RESTAURANT_CARDS_CACHE_NAME),
+			"restaurantCards cache must be configured");
+		this.guestCache = Objects.requireNonNull(redisCacheManager.getCache(GUEST_DEVICE_CACHE_NAME),
+			"guest_device cache must be configured");
 	}
 
 	public VoteRoom addVoteRoom(double latitude, double longitude, Integer password) throws InterruptedException {
@@ -66,7 +86,8 @@ public class RoomService {
 
 		List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(latitude, longitude);
 
-		restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+		getRestaurantsBlogReviewFromNaver(restaurantCards);
+		getRestaurantThumbnailUrl(restaurantCards);
 
 		VoteRoom voteRoom = roomRepository.save(VoteRoom.builder()
 			.voteDeadline(LocalDateTime.now().plusMinutes(30))
@@ -76,7 +97,7 @@ public class RoomService {
 			.restaurantCards(restaurantCards)
 			.build());
 
-		caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + voteRoom.getId(), restaurantCards);
+		restaurantCardsCache.put(voteRoom.getId(), restaurantCards);
 
 		return voteRoom;
 	}
@@ -123,7 +144,7 @@ public class RoomService {
 		}
 	}
 
-	private List<RestaurantCard> getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
+	private void getRestaurantsBlogReviewFromNaver(List<RestaurantCard> restaurantCards) throws
 		InterruptedException {
 
 		for (RestaurantCard restaurantCard : restaurantCards) {
@@ -149,27 +170,101 @@ public class RoomService {
 
 			if (response.getBody() != null) {
 				restaurantCard.setReviews(response.getBody().getItems());
-				restaurantCard.setTotalReview(response.getBody().getTotal());
+				restaurantCard.setReviewCount(response.getBody().getTotal());
+			}
+		}
+	}
+
+	private void getRestaurantThumbnailUrl(List<RestaurantCard> restaurantCards) {
+		for (RestaurantCard restaurantCard : restaurantCards) {
+			HttpHeaders httpHeaders = new HttpHeaders();
+			HttpEntity<String> entity = new HttpEntity<>(httpHeaders);
+			UriComponents uri = UriComponentsBuilder.fromUriString(
+					"http://place.map.kakao.com/" + restaurantCard.getId())
+				.encode()
+				.build();
+
+			try {
+				String contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, String.class).getBody();
+
+				if (contents != null) {
+					restaurantCard.setThumbnailUrl(getOgImage(contents));
+				}
+			} catch (RestClientException re) {
+				log.warn("thumbnail 가져오기 실패. restaurantCardId={}", restaurantCard.getId());
+			}
+		}
+	}
+
+	private String getOgImage(String html) {
+		String regex = "<meta[^>]*property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)[\"']";
+		String regexSafe = "<meta[^>]*content=[\"']([^\"']+)[\"'][^>]*property=[\"']og:image[\"']";
+
+		String imageUrl = null;
+
+		Pattern pattern = Pattern.compile(regex);
+		Matcher matcher = pattern.matcher(html);
+
+		if (matcher.find()) {
+			imageUrl = matcher.group(1);
+		} else {
+			pattern = Pattern.compile(regexSafe);
+			matcher = pattern.matcher(html);
+			if (matcher.find()) {
+				imageUrl = matcher.group(1);
 			}
 		}
 
-		return restaurantCards;
+		if (imageUrl != null) {
+			if (imageUrl.startsWith("//")) {
+				imageUrl = "https:" + imageUrl;
+			}
+		}
+
+		return imageUrl;
 	}
 
 	public VoteRoom inquiryVoteRoom(String roomId) throws InterruptedException {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
-		List<RestaurantCard> cachedRestaurantCards = caffeineCacheData.get(CAFFEINE_RESTAURANT_CARD_KEY + roomId,
-			List.class);
+		List<RestaurantCard> cachedRestaurantCards = restaurantCardsCache.get(roomId, List.class);
 		if (cachedRestaurantCards != null) {
 			voteRoom.setRestaurantCards(cachedRestaurantCards);
 		} else {
 			List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(voteRoom.getLatitude(),
 				voteRoom.getLongitude());
-			restaurantCards = getRestaurantsBlogReviewFromNaver(restaurantCards);
+			getRestaurantsBlogReviewFromNaver(restaurantCards);
 			voteRoom.setRestaurantCards(restaurantCards);
-			caffeineCacheData.put(CAFFEINE_RESTAURANT_CARD_KEY + roomId, restaurantCards);
+			restaurantCardsCache.put(roomId, restaurantCards);
 		}
 
 		return voteRoom;
+	}
+
+	public String addGuest(String roomId, GuestEnterRequestDto guestEnterRequestDto) {
+		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
+		if (voteRoom.getVoteDeadline().isBefore(LocalDateTime.now())) {
+			throw new IllegalStateException("마감된 투표방입니다.");
+		}
+
+		// UUID 생성
+		String uuid = UUID.randomUUID().toString();
+		String deviceId = guestEnterRequestDto.getDeviceId();
+		if (deviceId == null || deviceId.isBlank()) {
+			throw new IllegalArgumentException("deviceId 값이 비어있습니다.");
+		}
+
+		String key = "roomId:" + roomId + ":deviceId:" + guestEnterRequestDto.getDeviceId();
+
+		if (guestCache.get(key) == null) {
+			log.info("GuestRandomUUID={}", uuid);
+			guestCache.putIfAbsent(key, uuid);
+		} else {
+			uuid = guestCache.get(key, String.class);
+		}
+
+		HashMap<String, Object> claim = new HashMap<>();
+		claim.put("roomId", roomId);
+		claim.put("deviceId", guestEnterRequestDto.getDeviceId());
+		return jwtProvider.generateAccessToken(uuid, claim);
 	}
 }
