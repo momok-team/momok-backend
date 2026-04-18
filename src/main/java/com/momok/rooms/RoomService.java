@@ -18,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -183,10 +184,14 @@ public class RoomService {
 				.encode()
 				.build();
 
-			String contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, String.class).getBody();
+			try {
+				String contents = restTemplate.exchange(uri.toString(), HttpMethod.GET, entity, String.class).getBody();
 
-			if (contents != null) {
-				restaurantCard.setThumbnailUrl(getOgImage(contents));
+				if (contents != null) {
+					restaurantCard.setThumbnailUrl(getOgImage(contents));
+				}
+			} catch (RestClientException re) {
+				log.warn("thumbnail 가져오기 실패. restaurantCardId={}", restaurantCard.getId());
 			}
 		}
 	}
@@ -244,8 +249,8 @@ public class RoomService {
 		// UUID 생성
 		String uuid = UUID.randomUUID().toString();
 		String deviceId = guestEnterRequestDto.getDeviceId();
-		if (deviceId == null) {
-			throw new IllegalArgumentException("deviceId 값이 null입니다.");
+		if (deviceId == null || deviceId.isBlank()) {
+			throw new IllegalArgumentException("deviceId 값이 비어있습니다.");
 		}
 
 		String key = "roomId:" + roomId + ":deviceId:" + guestEnterRequestDto.getDeviceId();
