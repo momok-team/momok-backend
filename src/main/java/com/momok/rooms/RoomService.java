@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -27,9 +28,11 @@ import com.momok.global.JwtProvider;
 import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.KakaoMapResponseDto;
 import com.momok.rooms.Dto.NaverBlogResponseDto;
+import com.momok.rooms.Dto.VoteSubmitRequestDto;
 import com.momok.rooms.domain.RestaurantCard;
 import com.momok.rooms.domain.VoteRoom;
 
+import io.jsonwebtoken.Claims;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +69,8 @@ public class RoomService {
 	private String NAVER_CLIENT_SECRET;
 
 	private final JwtProvider jwtProvider;
+
+	private final StringRedisTemplate stringRedisTemplate;
 
 	@PostConstruct
 	public void initCaches() {
@@ -266,5 +271,45 @@ public class RoomService {
 		claim.put("roomId", roomId);
 		claim.put("deviceId", guestEnterRequestDto.getDeviceId());
 		return jwtProvider.generateAccessToken(uuid, claim);
+	}
+
+	public String saveForm(String roomId, String token, VoteSubmitRequestDto voteSubmitRequestDto) {
+		if (!jwtProvider.validateToken(token)) {
+			throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
+		}
+
+		String tokenRoomId = jwtProvider.getClaimFromToken(token, claims -> claims.get("roomId", String.class));
+
+		if (!roomId.equals(tokenRoomId)) {
+			throw new IllegalArgumentException("해당 방에 대한 투표 권한이 없습니다.");
+		}
+
+		String guestId = jwtProvider.getClaimFromToken(token, Claims::getSubject);
+
+		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
+
+		if (voteRoom.getVoteDeadline().isBefore(LocalDateTime.now())) {
+			throw new IllegalStateException("마감된 투표방입니다.");
+		}
+
+		if (voteSubmitRequestDto.getPlaceIds() == null || voteSubmitRequestDto.getPlaceIds().isEmpty()) {
+			throw new IllegalArgumentException("투표할 음식점이 없습니다.");
+		}
+
+		String votedKey = "voted:" + roomId + ":" + guestId;
+
+		Boolean firstVote = stringRedisTemplate.opsForValue().setIfAbsent(votedKey, "1");
+
+		if (Boolean.FALSE.equals(firstVote)) {
+			throw new IllegalStateException("이미 투표한 게스트입니다.");
+		}
+
+		String voteCountKey = "vote-count:" + roomId;
+
+		for (Long placeId : voteSubmitRequestDto.getPlaceIds()) {
+			stringRedisTemplate.opsForHash().increment(voteCountKey, String.valueOf(placeId), 1);
+		}
+
+		return "success";
 	}
 }
