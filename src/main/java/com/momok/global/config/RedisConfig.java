@@ -54,10 +54,15 @@ public class RedisConfig {
 			// 캐시 만료 시간 설정 (예: 1시간)
 			.entryTtl(Duration.ofHours(24));
 
+		RedisCacheConfiguration restaurantCardsConfig = RedisCacheConfiguration.defaultCacheConfig()
+			.serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
+			.entryTtl(Duration.ofHours(24));
+
 		return RedisCacheManager.RedisCacheManagerBuilder
 			.fromConnectionFactory(connectionFactory)
 			.cacheDefaults(config)
 			.withCacheConfiguration("guests", config)
+			.withCacheConfiguration("restaurant_cards", restaurantCardsConfig)
 			.build();
 	}
 }

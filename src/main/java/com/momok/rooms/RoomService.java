@@ -11,7 +11,6 @@ import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
-import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
@@ -45,8 +44,6 @@ public class RoomService {
 
 	private final RateLimitService rateLimitService;
 
-	private final CaffeineCacheManager caffeineCacheManager;
-
 	private final RedisCacheManager redisCacheManager;
 
 	private final RestTemplate restTemplate;
@@ -74,7 +71,7 @@ public class RoomService {
 
 	@PostConstruct
 	public void initCaches() {
-		this.restaurantCardsCache = Objects.requireNonNull(caffeineCacheManager.getCache(RESTAURANT_CARDS_CACHE_NAME),
+		this.restaurantCardsCache = Objects.requireNonNull(redisCacheManager.getCache(RESTAURANT_CARDS_CACHE_NAME),
 			"restaurantCards cache must be configured");
 		this.guestCache = Objects.requireNonNull(redisCacheManager.getCache(GUEST_DEVICE_CACHE_NAME),
 			"guest_device cache must be configured");
