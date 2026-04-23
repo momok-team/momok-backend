@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.GuestEnterResponseDto;
+import com.momok.rooms.Dto.VoteResultResponseDto;
 import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
 import com.momok.rooms.Dto.VoteRoomRequestDto;
 import com.momok.rooms.Dto.VoteRoomResponseDto;
@@ -77,5 +78,10 @@ public class RoomController {
 		String token = authorizationHeader.substring(7);
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(roomService.saveForm(roomId, token, voteSubmitRequestDto));
+	}
+
+	@GetMapping("/{roomId}/results")
+	public ResponseEntity<VoteResultResponseDto> resultVote(@PathVariable String roomId) {
+		return ResponseEntity.status(HttpStatus.OK).body(roomService.getResults(roomId));
 	}
 }

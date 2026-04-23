@@ -2,8 +2,10 @@ package com.momok.rooms;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -23,10 +25,13 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momok.global.JwtProvider;
 import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.KakaoMapResponseDto;
 import com.momok.rooms.Dto.NaverBlogResponseDto;
+import com.momok.rooms.Dto.VoteResultResponseDto;
 import com.momok.rooms.Dto.VoteSubmitRequestDto;
 import com.momok.rooms.domain.RestaurantCard;
 import com.momok.rooms.domain.VoteRoom;
@@ -68,6 +73,8 @@ public class RoomService {
 	private final JwtProvider jwtProvider;
 
 	private final StringRedisTemplate stringRedisTemplate;
+
+	private final ObjectMapper objectMapper;
 
 	@PostConstruct
 	public void initCaches() {
@@ -308,5 +315,61 @@ public class RoomService {
 		}
 
 		return "success";
+	}
+
+	public VoteResultResponseDto getResults(String roomId) {
+		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
+
+		Object cachedValue = restaurantCardsCache.get(roomId, Object.class);
+
+		List<RestaurantCard> restaurantCards = objectMapper.convertValue(
+			cachedValue,
+			new TypeReference<List<RestaurantCard>>() {
+			}
+		);
+
+		if (restaurantCards == null) {
+			throw new IllegalStateException("음식점 후보 목록을 찾을 수 없습니다.");
+		}
+
+		String voteCountKey = "vote-count:" + roomId;
+		Map<Object, Object> voteCounts = stringRedisTemplate.opsForHash()
+			.entries(voteCountKey);
+
+		List<VoteResultResponseDto.VoteResultItem> results = restaurantCards.stream()
+			.map(restaurantCard -> {
+				Object countValue = voteCounts.get(String.valueOf(restaurantCard.getId()));
+				Long voteCount = countValue == null ? 0L : Long.parseLong(String.valueOf(countValue));
+
+				return new VoteResultResponseDto.VoteResultItem(
+					restaurantCard,
+					voteCount,
+					0
+				);
+			})
+			.sorted(
+				Comparator
+					.comparing(VoteResultResponseDto.VoteResultItem::getVoteCount)
+					.reversed()
+			)
+			.limit(3)
+			.toList();
+
+		List<VoteResultResponseDto.VoteResultItem> rankedResults = new ArrayList<>();
+
+		for (int i = 0; i < results.size(); i++) {
+			VoteResultResponseDto.VoteResultItem item = results.get(i);
+
+			rankedResults.add(new VoteResultResponseDto.VoteResultItem(
+				item.getRestaurantCard(),
+				item.getVoteCount(),
+				i + 1
+			));
+		}
+
+		return VoteResultResponseDto.builder()
+			.roomId(voteRoom.getId())
+			.results(rankedResults)
+			.build();
 	}
 }
