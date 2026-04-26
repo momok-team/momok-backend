@@ -1,15 +1,19 @@
 package com.momok.rooms;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
@@ -235,13 +239,25 @@ public class RoomService {
 
 	public VoteRoom inquiryVoteRoom(String roomId) throws InterruptedException {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
-		List<RestaurantCard> cachedRestaurantCards = restaurantCardsCache.get(roomId, List.class);
-		if (cachedRestaurantCards != null) {
+		Object cachedValue = restaurantCardsCache.get(roomId, Object.class);
+
+		if (cachedValue != null) {
+			List<RestaurantCard> cachedRestaurantCards = objectMapper.convertValue(
+				cachedValue,
+				new TypeReference<List<RestaurantCard>>() {
+				}
+			);
+
 			voteRoom.setRestaurantCards(cachedRestaurantCards);
 		} else {
-			List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(voteRoom.getLatitude(),
-				voteRoom.getLongitude());
+			List<RestaurantCard> restaurantCards = getRestaurantsFromKakaoMap(
+				voteRoom.getLatitude(),
+				voteRoom.getLongitude()
+			);
+
 			getRestaurantsBlogReviewFromNaver(restaurantCards);
+			getRestaurantThumbnailUrl(restaurantCards);
+
 			voteRoom.setRestaurantCards(restaurantCards);
 			restaurantCardsCache.put(roomId, restaurantCards);
 		}
@@ -300,18 +316,44 @@ public class RoomService {
 			throw new IllegalArgumentException("투표할 음식점이 없습니다.");
 		}
 
+		Object cachedValue = restaurantCardsCache.get(roomId, Object.class);
+
+		if (cachedValue == null) {
+			throw new IllegalStateException("음식점 후보 목록을 찾을 수 없습니다.");
+		}
+
+		List<RestaurantCard> restaurantCards = objectMapper.convertValue(
+			cachedValue,
+			new TypeReference<List<RestaurantCard>>() {
+			}
+		);
+
+		Set<Long> submittedPlaceIds = new HashSet<>(voteSubmitRequestDto.getPlaceIds());
+
+		Set<Long> validPlaceIds = restaurantCards.stream()
+			.map(RestaurantCard::getId)
+			.collect(Collectors.toSet());
+
+		for (Long placeId : submittedPlaceIds) {
+			if (!validPlaceIds.contains(placeId)) {
+				throw new IllegalArgumentException("투표방에 없는 음식점입니다. placeId=" + placeId);
+			}
+		}
+
 		String votedKey = "voted:" + roomId + ":" + guestId;
 
-		Boolean firstVote = stringRedisTemplate.opsForValue().setIfAbsent(votedKey, "1");
+		Duration ttl = Duration.between(LocalDateTime.now(), voteRoom.getVoteDeadline());
+
+		Boolean firstVote = stringRedisTemplate.opsForValue().setIfAbsent(votedKey, "1", ttl);
 
 		if (Boolean.FALSE.equals(firstVote)) {
 			throw new IllegalStateException("이미 투표한 게스트입니다.");
 		}
 
 		String voteCountKey = "vote-count:" + roomId;
-
-		for (Long placeId : voteSubmitRequestDto.getPlaceIds()) {
-			stringRedisTemplate.opsForHash().increment(voteCountKey, String.valueOf(placeId), 1);
+		for (Long placeId : submittedPlaceIds) {
+			stringRedisTemplate.opsForHash()
+				.increment(voteCountKey, String.valueOf(placeId), 1);
 		}
 
 		return "success";
