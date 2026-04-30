@@ -19,6 +19,6 @@ public class PresenceWebSocketController {
 		@DestinationVariable String roomId,
 		PresencePingRequestDto request
 	) {
-		presenceService.ping(roomId, request.getGuestId());
+		presenceService.ping(roomId, request.getUserId());
 	}
 }

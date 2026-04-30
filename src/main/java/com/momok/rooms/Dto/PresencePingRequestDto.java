@@ -6,5 +6,5 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 public class PresencePingRequestDto {
-	private String guestId;
+	private String userId;
 }
