@@ -267,7 +267,7 @@ public class RoomService {
 
 	public String addGuest(String roomId, GuestEnterRequestDto guestEnterRequestDto) {
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
-		if (voteRoom.getVoteDeadline().isBefore(LocalDateTime.now())) {
+		if (!LocalDateTime.now().isBefore(voteRoom.getVoteDeadline())) {
 			throw new IllegalStateException("마감된 투표방입니다.");
 		}
 
@@ -308,7 +308,7 @@ public class RoomService {
 
 		VoteRoom voteRoom = roomRepository.findById(roomId).orElseThrow();
 
-		if (voteRoom.getVoteDeadline().isBefore(LocalDateTime.now())) {
+		if (!LocalDateTime.now().isBefore(voteRoom.getVoteDeadline())) {
 			throw new IllegalStateException("마감된 투표방입니다.");
 		}
 

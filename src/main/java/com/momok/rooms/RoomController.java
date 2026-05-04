@@ -71,6 +71,10 @@ public class RoomController {
 		@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
 		@RequestBody VoteSubmitRequestDto voteSubmitRequestDto) {
 
+		if (voteSubmitRequestDto == null) {
+			return ResponseEntity.badRequest().body("요청 본문이 비어있습니다.");
+		}
+
 		if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰이 없습니다.");
 		}
