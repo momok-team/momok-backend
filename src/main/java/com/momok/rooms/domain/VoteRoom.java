@@ -2,6 +2,7 @@ package com.momok.rooms.domain;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.annotation.CreatedDate;
 
@@ -49,6 +50,9 @@ public class VoteRoom {
 
 	@Transient
 	private List<RestaurantCard> restaurantCards;
+
+	@Transient
+	private Map<Long, Long> restaurantCounts;
 
 	public VoteRoomDetailsResponseDto toDetailDto() {
 		return VoteRoomDetailsResponseDto.builder()

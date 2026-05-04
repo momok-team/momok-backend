@@ -6,14 +6,17 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.momok.rooms.Dto.GuestEnterRequestDto;
 import com.momok.rooms.Dto.GuestEnterResponseDto;
+import com.momok.rooms.Dto.VoteResultResponseDto;
 import com.momok.rooms.Dto.VoteRoomDetailsResponseDto;
 import com.momok.rooms.Dto.VoteRoomRequestDto;
 import com.momok.rooms.Dto.VoteRoomResponseDto;
+import com.momok.rooms.Dto.VoteSubmitRequestDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -61,5 +64,28 @@ public class RoomController {
 		@RequestBody GuestEnterRequestDto guestEnterRequestDto) {
 		return ResponseEntity.status(HttpStatus.OK)
 			.body(new GuestEnterResponseDto(roomService.addGuest(roomId, guestEnterRequestDto)));
+	}
+
+	@PostMapping("/{roomId}/votes")
+	public ResponseEntity<String> submitVote(@PathVariable String roomId,
+		@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+		@RequestBody VoteSubmitRequestDto voteSubmitRequestDto) {
+
+		if (voteSubmitRequestDto == null) {
+			return ResponseEntity.badRequest().body("요청 본문이 비어있습니다.");
+		}
+
+		if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰이 없습니다.");
+		}
+
+		String token = authorizationHeader.substring(7);
+		return ResponseEntity.status(HttpStatus.OK)
+			.body(roomService.saveForm(roomId, token, voteSubmitRequestDto));
+	}
+
+	@GetMapping("/{roomId}/results")
+	public ResponseEntity<VoteResultResponseDto> resultVote(@PathVariable String roomId) {
+		return ResponseEntity.status(HttpStatus.OK).body(roomService.getResults(roomId));
 	}
 }
