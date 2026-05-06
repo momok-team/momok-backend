@@ -9,8 +9,10 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.momok.global.JwtProvider;
 import com.momok.rooms.Dto.PresenceCountResponseDto;
 
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -23,7 +25,24 @@ public class PresenceService {
 
 	private final SimpMessagingTemplate messagingTemplate;
 
-	public long ping(String roomId, String guestId) {
+	private final JwtProvider jwtProvider;
+
+	public long ping(String roomId, String sessionToken) {
+		if (!jwtProvider.validateToken(sessionToken)) {
+			throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
+		}
+
+		String tokenRoomId = jwtProvider.getClaimFromToken(
+			sessionToken,
+			claims -> claims.get("roomId", String.class)
+		);
+
+		if (!roomId.equals(tokenRoomId)) {
+			throw new IllegalArgumentException("해당 방에 대한 접근 권한이 없습니다.");
+		}
+
+		String guestId = jwtProvider.getClaimFromToken(sessionToken, Claims::getSubject);
+
 		long now = Instant.now().getEpochSecond();
 		String key = presenceKey(roomId);
 
